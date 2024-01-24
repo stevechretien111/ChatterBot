@@ -1,0 +1,116 @@
+import logging
+from chatterbot import languages
+from chatterbot.tagging import PosLemmaTagger
+from neo4j import GraphDatabase
+#from chatterbot.conversation import Statement
+#from chatterbot.storage import StorageAdapter
+
+class StorageAdapterCypher(object):
+    def __init__(self, uri, user, password):
+        try:
+            self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        except Exception as e:
+            print(f"Erreur lors de la connexion à la base de données : {e}")
+
+        self.tagger = PosLemmaTagger(language=languages.FRE)
+    def create(self, statement):
+      with self.driver.session() as session:
+    # Créer un nouveau noeud Statement
+    session.write_transaction(self._create_statement_node, statement)
+
+    # Lier le nouveau noeud aux noeuds existants
+    self._create_relationships(session, statement)
+
+    @staticmethod  
+    def _create_statement_node(tx, statement):
+  query = "CREATE (s:Statement {text: $text}) RETURN s"
+  tx.run(query, text=statement.text)
+
+    def _create_relationships(self, session, statement):
+  # Code pour créer des relations entre le nouveau noeud et d'autres noeuds
+      pass 
+    # Dans la classe Neo4jStorageAdapter
+
+   def count(self):
+    with self.driver.session() as session:
+        return session.run("MATCH (s:Statement) RETURN count(s) as count").single()[0]
+
+   def get_random(self):
+    with self.driver.session() as session:
+        result = session.run("MATCH (s:Statement) RETURN s SKIP $skip LIMIT 1", skip=random.randint(0, self.count()))
+        return result.single()[0].data()
+
+   def update(self, statement):
+    with self.driver.session() as session:
+        session.write_transaction(self._update_statement, statement)
+        
+@staticmethod
+   def _update_statement(tx, statement):
+    query = "MATCH (s:Statement {text: $text}) SET s.response = $response RETURN s"
+    tx.run(query, text=statement.text, response=statement.response)
+
+   def get_latest_response(self, statement):
+    # Récupère la dernière réponse connue pour l'énoncé
+    with self.driver.session() as session:
+        result = session.run("MATCH (s:Statement {text: $text}) RETURN s.response ORDER BY s.updated_at DESC LIMIT 1", text=statement.text)
+        return result.single()[0]
+
+
+
+    def count(self):
+        with self.driver.session() as session:
+            result = session.run("MATCH (s:Statement) RETURN COUNT(s) AS count")
+            return result.single()["count"]
+
+    def remove(self, statement_text):
+        with self.driver.session() as session:
+            session.run("MATCH (s:Statement {text: $text}) DETACH DELETE s", text=statement_text)
+
+    def filter(self, **kwargs):
+        with self.driver.session() as session:
+            return session.read_transaction(self._filter_statements, **kwargs)
+
+    @staticmethod
+    def _filter_statements(tx, **kwargs):
+        query = "MATCH (s:Statement) WHERE "
+        conditions = []
+        for key, value in kwargs.items():
+            if isinstance(value, str):
+                conditions.append(f"s.{key} =~ '{value}'")
+            else:
+                conditions.append(f"s.{key} = {value}")
+        query += " AND ".join(conditions)
+        query += " RETURN s"
+        results = tx.run(query)
+        statements = []
+        for record in results:
+            node = record[0]
+            statement = Statement(text=node["text"], response=node["response"])
+            statements.append(statement)
+        return statements
+
+    def create(self, **kwargs):
+        with self.driver.session() as session:
+            statement = kwargs.get('text', '')
+            response = kwargs.get('response', None)
+            session.write_transaction(self._create_statement, statement, response)
+
+    @staticmethod
+    def _create_statement(tx, statement, response):
+        query = (
+            "CREATE (s:Statement {text: $text, response: $response}) "
+            "RETURN s"
+        )
+        tx.run(query, text=statement, response=response)
+
+    # Implémentez les autres méthodes nécessaires de manière similaire
+
+    def drop(self):
+        with self.driver.session() as session:
+            session.write_transaction(self._drop_database)
+
+    @staticmethod
+    def _drop_database(tx):
+        query = "MATCH (n) DETACH DELETE n"
+        tx.run(query)
+
