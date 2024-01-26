@@ -1,4 +1,4 @@
-from chatterbot.tagging import PosHypernymTagger
+#from chatterbot.tagging import PosHypernymTagger
 from chatterbot import languages
 from chatterbot.storage import StorageAdapterCypher  # Importez StorageAdapterCypher au lieu de StorageAdapter
 from neo4j import GraphDatabase

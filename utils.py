@@ -1,7 +1,8 @@
 """
 ChatterBot utility functions
 """
-from chatterbot.storage.neo4j_storage import Neo4jStorageAdapter
+from chatterbot.storage import StorageAdapterCypher
+#from chatterbot.storage.neo4j_storage import Neo4jStorageAdapter
 from nltk.corpus import wordnet
 
 
